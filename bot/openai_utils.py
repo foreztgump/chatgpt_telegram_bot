@@ -1,18 +1,17 @@
-import config
-import os
 import tiktoken
 import openai
 import litellm 
 from litellm import completion, acompletion
 from openai.error import OpenAIError
+import config as app_config
 
-litellm.openai_key = config.openai_api_key
-litellm.huggingface_key = config.huggingface_api_key
-litellm.replicate_key = config.replicate_api_key
+litellm.openai_key = app_config.openai_api_key
+litellm.huggingface_key = app_config.huggingface_api_key
+litellm.replicate_key = app_config.replicate_api_key
 
-openai.api_key = config.openai_api_key
-if config.openai_api_base is not None:
-    openai.api_base = config.openai_api_base
+openai.api_key = app_config.openai_api_key
+if app_config.openai_api_base is not None:
+    openai.api_base = app_config.openai_api_base
 
 ## set model alias map
 model_alias_map = {
@@ -22,7 +21,7 @@ model_alias_map = {
     "GPT-3.5-16k": "gpt-3.5-turbo-16k",
     "Mistral-7b": "replicate/mistralai/mistral-7b-instruct-v0.1:83b6a56e7c828e667f21fd596c338fd4f0039b46bcfa18d973e8e70e455fda70"
 }
-
+litellm.model_alias_map = model_alias_map
 
 COMPLETION_OPTIONS = {
     "temperature": 0.7,
@@ -52,7 +51,7 @@ class ChatGPT:
         self.model = model
 
     async def send_message(self, message, dialog_messages=[], chat_mode="assistant"):
-        if chat_mode not in config.chat_modes.keys():
+        if chat_mode not in app_config.chat_modes.keys():
             raise ValueError(f"Chat mode {chat_mode} is not supported")
 
         n_dialog_messages_before = len(dialog_messages)
@@ -100,7 +99,7 @@ class ChatGPT:
         return answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
 
     async def send_message_stream(self, message, dialog_messages=[], chat_mode="assistant"):
-        if chat_mode not in config.chat_modes.keys():
+        if chat_mode not in app_config.chat_modes.keys():
             raise ValueError(f"Chat mode {chat_mode} is not supported")
 
         n_dialog_messages_before = len(dialog_messages)
@@ -169,7 +168,7 @@ class ChatGPT:
         yield "finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed  # sending final answer
 
     def _generate_prompt(self, message, dialog_messages, chat_mode):
-        prompt = config.chat_modes[chat_mode]["prompt_start"]
+        prompt = app_config.chat_modes[chat_mode]["prompt_start"]
         prompt += "\n\n"
 
         # add chat context
@@ -186,7 +185,7 @@ class ChatGPT:
         return prompt
 
     def _generate_prompt_messages(self, message, dialog_messages, chat_mode):
-        prompt = config.chat_modes[chat_mode]["prompt_start"]
+        prompt = app_config.chat_modes[chat_mode]["prompt_start"]
 
         messages = [{"role": "system", "content": prompt}]
         for dialog_message in dialog_messages:
