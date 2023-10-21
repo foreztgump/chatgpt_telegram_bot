@@ -1,6 +1,8 @@
+import os
 import tiktoken
 import openai
-import litellm 
+from . import replicate as rep
+import litellm
 from litellm import completion, acompletion
 from openai.error import OpenAIError
 import config as app_config
@@ -60,34 +62,36 @@ class ChatGPT:
             try:
                 if self.model in {"GPT-3.5", "GPT-3.5-16k", "GPT-4"}:
                     messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
-                    r = await completion(
+                    r = await acompletion(
                         model=self.model,
                         messages=messages,
                         **OPENAI_COMPLETION_OPTIONS
                     )
                     answer = r.choices[0].message["content"]
                 elif self.model == "Davinci-003":
-                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
-                    r = await completion(
-                        engine=self.model,
-                        prompt=prompt,
+                    messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
+                    r = await acompletion(
+                        model=self.model,
+                        messages=messages,
                         **OPENAI_COMPLETION_OPTIONS
                     )
-                    answer = r.choices[0].text
+                    answer = r.choices[0].message["content"]
                 elif self.model in {"Mistral-7b"}:
-                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
-                    r = await completion(
-                        engine=self.model,
-                        prompt=prompt,
+                    messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
+                    r = await acompletion(
+                        model=self.model,
+                        messages=messages,
                         **COMPLETION_OPTIONS
                     )
                     answer = r.choices[0].message["content"]
+                    
                 else:
                     raise ValueError(f"Unknown model: {self.model}")
 
                 answer = self._postprocess_answer(answer)
-                n_input_tokens, n_output_tokens = r.usage.prompt_tokens, r.usage.completion_tokens
-            except OpenAIError.InvalidRequestError as e:  # too many tokens
+
+                n_input_tokens, n_output_tokens = r["usage"]["prompt_tokens"], r["usage"]["completion_tokens"]
+            except OpenAIError as e:  # too many tokens
                 if len(dialog_messages) == 0:
                     raise ValueError("Dialog messages is reduced to zero, but still has too many tokens to make completion") from e
 
@@ -123,11 +127,12 @@ class ChatGPT:
                             n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, answer, model=self.model)
                             n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                             yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+                
                 elif self.model in {"Mistral-7b"}:
-                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
+                    messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
                     r_gen = await acompletion(
-                        engine=self.model,
-                        prompt=prompt,
+                        model=self.model,
+                        messages=messages,
                         stream=True,
                         **COMPLETION_OPTIONS
                     )
@@ -137,28 +142,31 @@ class ChatGPT:
                         delta = r_item.choices[0].delta
                         if "content" in delta:
                             answer += delta.content
-                            n_input_tokens, n_output_tokens = self._count_tokens_from_prompt(prompt, answer, model=self.model)
+                            n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, answer, model=self.model)
                             n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                             yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+                
                 elif self.model == "Davinci-003":
-                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
+                    messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
                     r_gen = await acompletion(
-                        engine=self.model,
-                        prompt=prompt,
+                        model=self.model,
+                        messages=messages,
                         stream=True,
                         **OPENAI_COMPLETION_OPTIONS
                     )
 
                     answer = ""
                     async for r_item in r_gen:
-                        answer += r_item.choices[0].text
-                        n_input_tokens, n_output_tokens = self._count_tokens_from_prompt(prompt, answer, model=self.model)
-                        n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
-                        yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+                        delta = r_item.choices[0].delta
+                        if "content" in delta:
+                            answer += delta.content
+                            n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, answer, model=self.model)
+                            n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
+                            yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
 
                 answer = self._postprocess_answer(answer)
 
-            except OpenAIError.InvalidRequestError as e:  # too many tokens
+            except OpenAIError as e:  # too many tokens
                 if len(dialog_messages) == 0:
                     raise e
 
@@ -204,20 +212,18 @@ class ChatGPT:
         return answer
 
     def _count_tokens_from_messages(self, messages, answer, model="GPT-3.5"):
-        encoding = tiktoken.encoding_for_model(model)
-
         if model == "GPT-3.5-16k":
+            encoding = tiktoken.encoding_for_model("gpt-3.5-turbo-16k")
             tokens_per_message = 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
             tokens_per_name = -1  # if there's a name, the role is omitted
-        elif model == "GPT-3.5":
+        elif model == "GPT-3.5" or model != "GPT-4" and model == "Mistral-7b":
+            encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
             tokens_per_message = 4
             tokens_per_name = -1
         elif model == "GPT-4":
+            encoding = tiktoken.encoding_for_model("gpt-4")
             tokens_per_message = 3
             tokens_per_name = 1
-        elif model == "Mistral-7b":
-            tokens_per_message = 4
-            tokens_per_name = -1
         else:
             raise ValueError(f"Unknown model: {model}")
 
@@ -251,12 +257,25 @@ async def transcribe_audio(audio_file):
     return r["text"]
 
 
-async def generate_images(prompt, n_images=4, size="512x512"):
-    r = await openai.Image.acreate(prompt=prompt, n=n_images, size=size)
-    image_urls = [item.url for item in r.data]
+async def generate_images(model, prompt, n_images=4, size="512x512"):
+    if model == "OpenAI":
+        r = await openai.Image.acreate(prompt=prompt, n=n_images, size=size)
+        image_urls = [item.url for item in r.data]
+    elif model == "Replicate":
+        os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
+        r = await rep.async_run (
+            "stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316",
+            input={
+                "prompt": prompt,
+                "num_images": n_images,
+            },
+        )
+        image_urls = r
+    
     return image_urls
 
 
 async def is_content_acceptable(prompt):
     r = await openai.Moderation.acreate(input=prompt)
     return not all(r.results[0].categories.values())
+

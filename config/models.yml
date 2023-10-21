@@ -53,14 +53,6 @@ info:
       Fast: 2
       Cheap: 3
 
-  dalle-2:
-     type: image
-     price_per_1_image: 0.018  # 512x512
-
-  whisper:
-    type: audio
-    price_per_1_min: 0.006
-
   Mistral-7b:
     type: chat_completion
     name: Mistral-7b
@@ -73,3 +65,11 @@ info:
       Smart: 4
       Fast: 2
       Cheap: 2
+      
+  dalle-2:
+     type: image
+     price_per_1_image: 0.018  # 512x512
+
+  whisper:
+    type: audio
+    price_per_1_min: 0.006

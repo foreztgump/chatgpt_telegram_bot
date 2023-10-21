@@ -14,10 +14,13 @@ code_assistant:
     Format output in Markdown.
   parse_mode: markdown
 
-artist:
-  name: 👩‍🎨 Artist
+artist_openai:
+  name: 👩‍🎨 Artist OpenAI
   welcome_message: 👩‍🎨 Hi, I'm <b>Tee's bot artist</b>. I'll draw anything you write me (e.g. <i>Ginger cat selfie on Times Square, illustration</i>)
 
+artist_replicate:
+  name: 👩‍🎨 Artist Replica
+  welcome_message: 👩‍🎨 Hi, I'm <b>Tee's bot artist</b>. I'll draw anything you write me (e.g. <i>Ginger cat selfie on Times Square, illustration</i>)
 
 boos_text_improver:
   name: 📝 Boo's Text Improver
