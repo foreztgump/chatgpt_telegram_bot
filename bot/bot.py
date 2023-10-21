@@ -382,10 +382,21 @@ async def generate_image_handle(model, update: Update, context: CallbackContext,
 
     await update.message.chat.send_action(action="upload_photo")
 
-    message = message or update.message.text
+    if update.message.photo:
+        # get largest image
+        image = update.message.photo[-1].get_file()
+        # random filename
+        image.download(custom_path=f"{user_id}.jpg")
+        if update.message.caption:
+            message = update.message.caption
+    else:
+        message = message or update.message.text
 
     try:
-        image_urls = await openai_utils.generate_images(model, message, n_images=config.return_n_generated_images, size=config.image_size)
+        if image is None:
+            image_urls = await openai_utils.generate_images(model, message, n_images=config.return_n_generated_images, size=config.image_size)
+        else:
+            image_urls = await openai_utils.generate_images(model, message, n_images=config.return_n_generated_images, size=config.image_size, image_file=f"{user_id}.jpg")
     except openai.error.InvalidRequestError as e:
         if str(e).startswith("Your request was rejected as a result of our safety system"):
             text = "🥲 Your request <b>doesn't comply</b> with OpenAI's usage policies.\nWhat did you write there, huh?"

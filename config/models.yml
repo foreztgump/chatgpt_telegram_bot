@@ -1,4 +1,4 @@
-available_text_models: ["GPT3.5-16k", "GPT-4", "Mistral-7b"]
+available_text_models: ["GPT-3.5-16k", "GPT-4", "Mistral-7b"]
 
 info:
   GPT-3.5:
@@ -63,7 +63,7 @@ info:
 
     scores:
       Smart: 4
-      Fast: 2
+      Fast: 3
       Cheap: 2
       
   dalle-2:

@@ -259,14 +259,15 @@ async def transcribe_audio(audio_file):
     return r["text"]
 
 
-async def generate_images(model, prompt, n_images=4, size="512x512"):
+async def generate_images(model, prompt, n_images=4, size="512x512", image_file=None):
     if model == "OpenAI":
         r = await openai.Image.acreate(prompt=prompt, n=n_images, size=size)
         image_urls = [item.url for item in r.data]
     elif model == "Replicate":
         os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
         executor = ThreadPoolExecutor(max_workers=5)
-        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images))
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image_file))
+
         image_urls = r
     
     return image_urls
@@ -277,11 +278,12 @@ async def is_content_acceptable(prompt):
     return not all(r.results[0].categories.values())
 
 
-def replicate_run(prompt, n_images=4):
+def replicate_run(prompt, n_images=4, image=None):
     return rep.run(
         "stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316",
         input={
             "prompt": prompt,
             "num_images": n_images,
+            "image": image,
         },
     )
