@@ -1,7 +1,7 @@
 import os
 import tiktoken
 import openai
-from . import replicate as rep
+import replicate as rep
 import litellm
 from litellm import completion, acompletion
 from openai.error import OpenAIError
@@ -263,7 +263,7 @@ async def generate_images(model, prompt, n_images=4, size="512x512"):
         image_urls = [item.url for item in r.data]
     elif model == "Replicate":
         os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
-        r = await rep.async_run (
+        r = await rep.run(
             "stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316",
             input={
                 "prompt": prompt,
