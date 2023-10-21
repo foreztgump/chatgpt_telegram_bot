@@ -6,6 +6,8 @@ import litellm
 from litellm import completion, acompletion
 from openai.error import OpenAIError
 import config as app_config
+import asyncio
+from concurrent.futures import Executor, ThreadPoolExecutor
 
 litellm.openai_key = app_config.openai_api_key
 litellm.huggingface_key = app_config.huggingface_api_key
@@ -263,13 +265,8 @@ async def generate_images(model, prompt, n_images=4, size="512x512"):
         image_urls = [item.url for item in r.data]
     elif model == "Replicate":
         os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
-        r = await rep.run(
-            "stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316",
-            input={
-                "prompt": prompt,
-                "num_images": n_images,
-            },
-        )
+        executor = ThreadPoolExecutor(max_workers=5)
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images))
         image_urls = r
     
     return image_urls
@@ -279,3 +276,12 @@ async def is_content_acceptable(prompt):
     r = await openai.Moderation.acreate(input=prompt)
     return not all(r.results[0].categories.values())
 
+
+def replicate_run(prompt, n_images=4):
+    return rep.run(
+        "stability-ai/sdxl:c221b2b8ef527988fb59bf24a8b97c4561f1c671f73bd389f866bfb27c061316",
+        input={
+            "prompt": prompt,
+            "num_images": n_images,
+        },
+    )
