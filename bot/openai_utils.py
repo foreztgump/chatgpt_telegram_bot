@@ -1,14 +1,23 @@
 import config
-
+import os
 import tiktoken
 import openai
+from litellm import completion, acompletion
+from openai.error import OpenAIError
 
+os.environ["OPENAI_API_KEY"]
+os.environ["REPLICATE_API_KEY"]
 
-# setup openai
-openai.api_key = config.openai_api_key
+openai.api_key = os.environ["OPENAI_API_KEY"]
 if config.openai_api_base is not None:
     openai.api_base = config.openai_api_base
 
+COMPLETION_OPTIONS = {
+    "temperature": 0.7,
+    "max_tokens": 1000,
+    "top_p": 1,
+    "request_timeout": 60.0,
+}
 
 OPENAI_COMPLETION_OPTIONS = {
     "temperature": 0.7,
@@ -19,10 +28,16 @@ OPENAI_COMPLETION_OPTIONS = {
     "request_timeout": 60.0,
 }
 
-
 class ChatGPT:
     def __init__(self, model="gpt-3.5-turbo"):
-        assert model in {"text-davinci-003", "gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4"}, f"Unknown model: {model}"
+        assert model in {
+            "text-davinci-003", 
+            "gpt-3.5-turbo-16k", 
+            "gpt-3.5-turbo", 
+            "gpt-4",
+            "mistral-7b-instruct-v0.1",
+            ""
+            }, f"Unknown model: {model}"
         self.model = model
 
     async def send_message(self, message, dialog_messages=[], chat_mode="assistant"):
@@ -35,7 +50,7 @@ class ChatGPT:
             try:
                 if self.model in {"gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4"}:
                     messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
-                    r = await openai.ChatCompletion.acreate(
+                    r = await completion(
                         model=self.model,
                         messages=messages,
                         **OPENAI_COMPLETION_OPTIONS
@@ -43,18 +58,26 @@ class ChatGPT:
                     answer = r.choices[0].message["content"]
                 elif self.model == "text-davinci-003":
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
-                    r = await openai.Completion.acreate(
+                    r = await completion(
                         engine=self.model,
                         prompt=prompt,
                         **OPENAI_COMPLETION_OPTIONS
                     )
                     answer = r.choices[0].text
+                elif self.model in {"mistral-7b-instruct-v0.1"}:
+                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
+                    r = await completion(
+                        engine=self.model,
+                        prompt=prompt,
+                        **COMPLETION_OPTIONS
+                    )
+                    answer = r.choices[0].message["content"]
                 else:
                     raise ValueError(f"Unknown model: {self.model}")
 
                 answer = self._postprocess_answer(answer)
                 n_input_tokens, n_output_tokens = r.usage.prompt_tokens, r.usage.completion_tokens
-            except openai.error.InvalidRequestError as e:  # too many tokens
+            except OpenAIError.InvalidRequestError as e:  # too many tokens
                 if len(dialog_messages) == 0:
                     raise ValueError("Dialog messages is reduced to zero, but still has too many tokens to make completion") from e
 
@@ -75,7 +98,7 @@ class ChatGPT:
             try:
                 if self.model in {"gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4"}:
                     messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
-                    r_gen = await openai.ChatCompletion.acreate(
+                    r_gen = await acompletion(
                         model=self.model,
                         messages=messages,
                         stream=True,
@@ -90,9 +113,26 @@ class ChatGPT:
                             n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, answer, model=self.model)
                             n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                             yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+                elif self.model in {"mistral-7b-instruct-v0.1"}:
+                    prompt = self._generate_prompt(message, dialog_messages, chat_mode)
+                    r_gen = await acompletion(
+                        engine=self.model,
+                        prompt=prompt,
+                        stream=True,
+                        **COMPLETION_OPTIONS
+                    )
+
+                    answer = ""
+                    async for r_item in r_gen:
+                        delta = r_item.choices[0].delta
+                        if "content" in delta:
+                            answer += delta.content
+                            n_input_tokens, n_output_tokens = self._count_tokens_from_prompt(prompt, answer, model=self.model)
+                            n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
+                            yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
                 elif self.model == "text-davinci-003":
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
-                    r_gen = await openai.Completion.acreate(
+                    r_gen = await acompletion(
                         engine=self.model,
                         prompt=prompt,
                         stream=True,
@@ -108,7 +148,7 @@ class ChatGPT:
 
                 answer = self._postprocess_answer(answer)
 
-            except openai.error.InvalidRequestError as e:  # too many tokens
+            except OpenAIError.InvalidRequestError as e:  # too many tokens
                 if len(dialog_messages) == 0:
                     raise e
 
@@ -139,8 +179,12 @@ class ChatGPT:
 
         messages = [{"role": "system", "content": prompt}]
         for dialog_message in dialog_messages:
-            messages.append({"role": "user", "content": dialog_message["user"]})
-            messages.append({"role": "assistant", "content": dialog_message["bot"]})
+            messages.extend(
+                (
+                    {"role": "user", "content": dialog_message["user"]},
+                    {"role": "assistant", "content": dialog_message["bot"]},
+                )
+            )
         messages.append({"role": "user", "content": message})
 
         return messages
