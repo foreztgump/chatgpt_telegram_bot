@@ -2,15 +2,27 @@ import config
 import os
 import tiktoken
 import openai
+import litellm 
 from litellm import completion, acompletion
 from openai.error import OpenAIError
 
-os.environ["OPENAI_API_KEY"]
-os.environ["REPLICATE_API_KEY"]
+litellm.openai_key = config.openai_api_key
+litellm.huggingface_key = config.huggingface_api_key
+litellm.replicate_key = config.replicate_api_key
 
-openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_key = config.openai_api_key
 if config.openai_api_base is not None:
     openai.api_base = config.openai_api_base
+
+## set model alias map
+model_alias_map = {
+    "GPT-3.5": "gpt-3.5-turbo",
+    "Davinci-003": "text-davinci-003",
+    "GPT-4": "gpt-4",
+    "GPT-3.5-16k": "gpt-3.5-turbo-16k",
+    "Mistral-7b": "replicate/mistralai/mistral-7b-instruct-v0.1:83b6a56e7c828e667f21fd596c338fd4f0039b46bcfa18d973e8e70e455fda70"
+}
+
 
 COMPLETION_OPTIONS = {
     "temperature": 0.7,
@@ -29,14 +41,13 @@ OPENAI_COMPLETION_OPTIONS = {
 }
 
 class ChatGPT:
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model="GPT-3.5"):
         assert model in {
-            "text-davinci-003", 
-            "gpt-3.5-turbo-16k", 
-            "gpt-3.5-turbo", 
-            "gpt-4",
-            "mistral-7b-instruct-v0.1",
-            ""
+            "Davinci-003", 
+            "GPT-3.5", 
+            "GPT-3.5-16k", 
+            "GPT-4",
+            "Mistral-7b",
             }, f"Unknown model: {model}"
         self.model = model
 
@@ -48,7 +59,7 @@ class ChatGPT:
         answer = None
         while answer is None:
             try:
-                if self.model in {"gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4"}:
+                if self.model in {"GPT-3.5", "GPT-3.5-16k", "GPT-4"}:
                     messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
                     r = await completion(
                         model=self.model,
@@ -56,7 +67,7 @@ class ChatGPT:
                         **OPENAI_COMPLETION_OPTIONS
                     )
                     answer = r.choices[0].message["content"]
-                elif self.model == "text-davinci-003":
+                elif self.model == "Davinci-003":
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
                     r = await completion(
                         engine=self.model,
@@ -64,7 +75,7 @@ class ChatGPT:
                         **OPENAI_COMPLETION_OPTIONS
                     )
                     answer = r.choices[0].text
-                elif self.model in {"mistral-7b-instruct-v0.1"}:
+                elif self.model in {"Mistral-7b"}:
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
                     r = await completion(
                         engine=self.model,
@@ -96,7 +107,7 @@ class ChatGPT:
         answer = None
         while answer is None:
             try:
-                if self.model in {"gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4"}:
+                if self.model in {"GPT-3.5", "GPT-3.5-16k", "GPT-4"}:
                     messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
                     r_gen = await acompletion(
                         model=self.model,
@@ -113,7 +124,7 @@ class ChatGPT:
                             n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, answer, model=self.model)
                             n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                             yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
-                elif self.model in {"mistral-7b-instruct-v0.1"}:
+                elif self.model in {"Mistral-7b"}:
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
                     r_gen = await acompletion(
                         engine=self.model,
@@ -130,7 +141,7 @@ class ChatGPT:
                             n_input_tokens, n_output_tokens = self._count_tokens_from_prompt(prompt, answer, model=self.model)
                             n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                             yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
-                elif self.model == "text-davinci-003":
+                elif self.model == "Davinci-003":
                     prompt = self._generate_prompt(message, dialog_messages, chat_mode)
                     r_gen = await acompletion(
                         engine=self.model,
@@ -193,18 +204,21 @@ class ChatGPT:
         answer = answer.strip()
         return answer
 
-    def _count_tokens_from_messages(self, messages, answer, model="gpt-3.5-turbo"):
+    def _count_tokens_from_messages(self, messages, answer, model="GPT-3.5"):
         encoding = tiktoken.encoding_for_model(model)
 
-        if model == "gpt-3.5-turbo-16k":
+        if model == "GPT-3.5-16k":
             tokens_per_message = 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
             tokens_per_name = -1  # if there's a name, the role is omitted
-        elif model == "gpt-3.5-turbo":
+        elif model == "GPT-3.5":
             tokens_per_message = 4
             tokens_per_name = -1
-        elif model == "gpt-4":
+        elif model == "GPT-4":
             tokens_per_message = 3
             tokens_per_name = 1
+        elif model == "Mistral-7b":
+            tokens_per_message = 4
+            tokens_per_name = -1
         else:
             raise ValueError(f"Unknown model: {model}")
 
@@ -224,7 +238,7 @@ class ChatGPT:
 
         return n_input_tokens, n_output_tokens
 
-    def _count_tokens_from_prompt(self, prompt, answer, model="text-davinci-003"):
+    def _count_tokens_from_prompt(self, prompt, answer, model="Davinci-003"):
         encoding = tiktoken.encoding_for_model(model)
 
         n_input_tokens = len(encoding.encode(prompt)) + 1
