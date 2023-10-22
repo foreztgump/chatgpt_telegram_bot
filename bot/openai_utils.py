@@ -260,15 +260,18 @@ async def transcribe_audio(audio_file):
 
 
 async def generate_images(model, prompt, n_images=4, size="512x512", image_file=None):
-    if model == "OpenAI":
-        r = await openai.Image.acreate(prompt=prompt, n=n_images, size=size)
-        image_urls = [item.url for item in r.data]
-    elif model == "Replicate":
-        os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
-        executor = ThreadPoolExecutor(max_workers=5)
-        image = open(image_file, "rb") if image_file is not None else None
-        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image))
+    # if model == "OpenAI":
+    #     r = await openai.Image.acreate(prompt=prompt, n=n_images, size=size)
+    #     image_urls = [item.url for item in r.data]
 
+    os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
+    executor = ThreadPoolExecutor(max_workers=5)
+    image = open(image_file, "rb") if image_file is not None else None
+    if model == "artist_replicate":
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image))
+        image_urls = r
+    if model == "artist_logo":
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_logo(prompt, n_images, image=image))
         image_urls = r
 
     return image_urls
@@ -302,3 +305,19 @@ def replicate_run(prompt, n_images=4, image=None):
             },
         )
     return result
+
+def replicate_logo(prompt):
+    return rep.run(
+        "laion-ai/erlich:92fa143ccefeed01534d5d6648bd47796ef06847a6bc55c0e5c5b6975f2dcdfb",
+        input={
+            "seed": "-1",
+            "steps": "100",
+            "width": "256",
+            "height": "256",
+            "prompt": prompt,
+            "batch_size": "6",
+            "guidance_scale": "5",
+            "aesthetic_rating": 9,
+            "aesthetic_weight": 0.1
+        },
+    )
