@@ -14,10 +14,6 @@ code_assistant:
     Format output in Markdown.
   parse_mode: markdown
 
-artist_logo:
-  name: 👩‍🎨 Logo Artist
-  welcome_message: 👩‍🎨 Hi, I'm <b>Tee's bot Logo Artist</b>. I'll draw logos for you according to what you write me (e.g. <i>paper plane logo with shadow of plane flying around the world, logo, digital art</i>)
-
 artist_replicate:
   name: 👩‍🎨 SDXL Artist
   welcome_message: 👩‍🎨 Hi, I'm <b>Tee's bot SDXL Artist</b>. I'll draw anything you write me (e.g. <i>An astronaut riding a rainbow unicorn, cinematic, dramatic</i>)

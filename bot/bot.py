@@ -203,10 +203,10 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     user_id = update.message.from_user.id
     chat_mode = db.get_user_attribute(user_id, "current_chat_mode")
 
-    if chat_mode == "artist_logo":
-        await generate_image_handle("logo", update, context, message=message, image_file=image_path)
-        return
-    elif chat_mode == "artist_replicate":
+    # if chat_mode == "artist_logo":
+    #     await generate_image_handle("logo", update, context, message=message, image_file=image_path)
+    #     return
+    if chat_mode == "artist_replicate":
         await generate_image_handle("sdxl", update, context, message=message, image_file=image_path)
         return
 
