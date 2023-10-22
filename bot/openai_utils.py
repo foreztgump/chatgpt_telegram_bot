@@ -271,7 +271,7 @@ async def generate_images(model, prompt, n_images=4, size="512x512", image_file=
         r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image))
         image_urls = r
     elif model == "logo":
-        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_logo(prompt, n_images, image=image))
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_logo(prompt))
         image_urls = r
 
     return image_urls
