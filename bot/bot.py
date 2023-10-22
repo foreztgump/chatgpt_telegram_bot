@@ -362,9 +362,6 @@ async def photo_handle(update: Update, context: CallbackContext):
     # get caption
     caption = update.message.caption or ""
 
-    text = "🖼️ <i>Generating image...</i>"
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-
     await message_handle(update, context, message=caption, image_path=photo_path)
 
 
@@ -414,6 +411,9 @@ async def generate_image_handle(model, update: Update, context: CallbackContext,
 
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
+
+    text = "🖼️ <i>Generating image...</i>"
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
     await update.message.chat.send_action(action="upload_photo")
 
