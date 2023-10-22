@@ -266,7 +266,9 @@ async def generate_images(model, prompt, n_images=4, size="512x512", image_file=
     elif model == "Replicate":
         os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
         executor = ThreadPoolExecutor(max_workers=5)
-        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image_file))
+        if image_file:
+            image = open(image_file, "rb")
+        r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image))
 
         image_urls = r
     
