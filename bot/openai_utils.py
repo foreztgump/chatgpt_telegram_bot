@@ -267,10 +267,10 @@ async def generate_images(model, prompt, n_images=4, size="512x512", image_file=
     os.environ["REPLICATE_API_TOKEN"] = app_config.replicate_api_key
     executor = ThreadPoolExecutor(max_workers=5)
     image = open(image_file, "rb") if image_file is not None else None
-    if model == "artist_replicate":
+    if model == "sdxl":
         r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_run(prompt, n_images, image=image))
         image_urls = r
-    if model == "artist_logo":
+    elif model == "logo":
         r = await asyncio.get_event_loop().run_in_executor(executor, lambda: replicate_logo(prompt, n_images, image=image))
         image_urls = r
 
